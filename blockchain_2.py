@@ -8,7 +8,6 @@ from cryptography.fernet import Fernet
 
 # ===================== DEVICE AUTHORIZATION =====================
 
-# Load booth-specific secret key (device identity)
 with open("booth_secret.key", "rb") as key_file:
     DEVICE_SECRET_KEY = key_file.read()
 
@@ -56,11 +55,10 @@ class Blockchain:
     def get_latest_block(self):
         return self.chain[-1]
 
-    # 🔴 CHANGED: timestamp is now passed explicitly
     def add_block(self, voter_hash, timestamp):
         previous_block = self.get_latest_block()
         new_block = Block(
-            index=previous_block.index + 1,
+            index=previous_block.index + 1,  # 👈 ORDER OF SCAN
             timestamp=timestamp,
             voter_hash=voter_hash,
             previous_hash=previous_block.hash
@@ -105,8 +103,7 @@ def scan_qr_code():
 
         for obj in decoded_objects:
             try:
-                encrypted_data = obj.data
-                decrypted = cipher.decrypt(encrypted_data)
+                decrypted = cipher.decrypt(obj.data)
                 voter_data = json.loads(decrypted.decode())
 
                 cap.release()
@@ -145,15 +142,18 @@ if __name__ == "__main__":
             print("QR scan cancelled or failed.")
             continue
 
-        # ✅ Timestamp captured AT SCAN TIME
         scan_timestamp = datetime.now().isoformat()
-
         voter_hash = hash_voter_id(voter["voter_id"])
+
         booth_blockchain.add_block(voter_hash, scan_timestamp)
 
-        print("Vote validated and recorded")
+        # ✅ DISPLAY ORDER / COUNT
+        vote_count = booth_blockchain.get_latest_block().index
+
+        print("✅ Vote recorded successfully")
+        print("Vote Count (Order):", vote_count)
         print("Timestamp:", scan_timestamp)
 
     print("\nBlockchain valid:", booth_blockchain.is_chain_valid())
-    booth_blockchain.save_to_file("booth_ledger_2.json")
-    print("Ledger saved as booth_ledger_2.json")
+    booth_blockchain.save_to_file("booth_ledger_1.json")
+    print("Ledger saved as booth_ledger_1.json")

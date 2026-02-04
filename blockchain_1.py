@@ -4,39 +4,54 @@ import hashlib
 import json
 from datetime import datetime
 from cryptography.fernet import Fernet
+import sqlite3
 
 
 # ===================== DEVICE AUTHORIZATION =====================
 
-# Load booth-specific secret key (device identity)
 with open("booth_secret.key", "rb") as key_file:
     DEVICE_SECRET_KEY = key_file.read()
 
 cipher = Fernet(DEVICE_SECRET_KEY)
 
 
-# ===================== BLOCK & BLOCKCHAIN =====================
+# ===================== DATABASE SETUP =====================
+
+DB_NAME = "booth_ledger.db"
+
+def get_db():
+    return sqlite3.connect(DB_NAME)
+
+def create_ledger_table():
+    db = get_db()
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS booth_ledger (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vote_count INTEGER NOT NULL,
+            voter_hash TEXT NOT NULL,
+            timestamp TEXT NOT NULL
+        )
+    """)
+    db.commit()
+    db.close()
+
+def save_vote_to_db(vote_count, voter_hash, timestamp):
+    db = get_db()
+    db.execute("""
+        INSERT INTO booth_ledger (vote_count, voter_hash, timestamp)
+        VALUES (?, ?, ?)
+    """, (vote_count, voter_hash, timestamp))
+    db.commit()
+    db.close()
+
+
+# ===================== BLOCKCHAIN (ORDER ONLY) =====================
 
 class Block:
-    def __init__(self, index, timestamp, voter_hash, previous_hash):
+    def __init__(self, index, timestamp, voter_hash):
         self.index = index
         self.timestamp = timestamp
         self.voter_hash = voter_hash
-        self.previous_hash = previous_hash
-        self.hash = self.calculate_hash()
-
-    def calculate_hash(self):
-        block_string = f"{self.index}{self.timestamp}{self.voter_hash}{self.previous_hash}"
-        return hashlib.sha256(block_string.encode()).hexdigest()
-
-    def to_dict(self):
-        return {
-            "index": self.index,
-            "timestamp": self.timestamp,
-            "voter_hash": self.voter_hash,
-            "previous_hash": self.previous_hash,
-            "hash": self.hash
-        }
 
 
 class Blockchain:
@@ -48,41 +63,22 @@ class Blockchain:
         genesis_block = Block(
             index=0,
             timestamp=datetime.now().isoformat(),
-            voter_hash="GENESIS",
-            previous_hash="0"
+            voter_hash="GENESIS"
         )
         self.chain.append(genesis_block)
 
     def get_latest_block(self):
         return self.chain[-1]
 
-    # 🔴 CHANGED: timestamp is now passed explicitly
     def add_block(self, voter_hash, timestamp):
         previous_block = self.get_latest_block()
         new_block = Block(
-            index=previous_block.index + 1,
+            index=previous_block.index + 1,   # ORDER / COUNT
             timestamp=timestamp,
-            voter_hash=voter_hash,
-            previous_hash=previous_block.hash
+            voter_hash=voter_hash
         )
         self.chain.append(new_block)
-
-    def is_chain_valid(self):
-        for i in range(1, len(self.chain)):
-            current = self.chain[i]
-            previous = self.chain[i - 1]
-
-            if current.hash != current.calculate_hash():
-                return False
-
-            if current.previous_hash != previous.hash:
-                return False
-
-        return True
-
-    def save_to_file(self, filename):
-        with open(filename, "w") as file:
-            json.dump([block.to_dict() for block in self.chain], file, indent=4)
+        return new_block
 
 
 # ===================== HELPER FUNCTIONS =====================
@@ -105,8 +101,7 @@ def scan_qr_code():
 
         for obj in decoded_objects:
             try:
-                encrypted_data = obj.data
-                decrypted = cipher.decrypt(encrypted_data)
+                decrypted = cipher.decrypt(obj.data)
                 voter_data = json.loads(decrypted.decode())
 
                 cap.release()
@@ -129,6 +124,8 @@ def scan_qr_code():
 # ===================== MAIN =====================
 
 if __name__ == "__main__":
+    create_ledger_table()
+
     booth_blockchain = Blockchain()
     print("OBVV Polling Booth Started (Offline)")
 
@@ -145,15 +142,19 @@ if __name__ == "__main__":
             print("QR scan cancelled or failed.")
             continue
 
-        # ✅ Timestamp captured AT SCAN TIME
         scan_timestamp = datetime.now().isoformat()
-
         voter_hash = hash_voter_id(voter["voter_id"])
-        booth_blockchain.add_block(voter_hash, scan_timestamp)
 
-        print("Vote validated and recorded")
-        print("Timestamp:", scan_timestamp)
+        new_block = booth_blockchain.add_block(voter_hash, scan_timestamp)
 
-    print("\nBlockchain valid:", booth_blockchain.is_chain_valid())
-    booth_blockchain.save_to_file("booth_ledger_1.json")
-    print("Ledger saved as booth_ledger_1.json")
+        save_vote_to_db(
+            vote_count=new_block.index,
+            voter_hash=voter_hash,
+            timestamp=scan_timestamp
+        )
+
+        print("✅ Vote recorded successfully")
+        print("Vote Count :", new_block.index)
+        print("Timestamp  :", scan_timestamp)
+
+    print("\nLedger stored in SQL database:", DB_NAME)

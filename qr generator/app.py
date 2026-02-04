@@ -1,11 +1,15 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, send_file
 import sqlite3
 import qrcode
 import json
 from datetime import datetime
 from cryptography.fernet import Fernet
 import os
-import re
+
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Image, Paragraph, Spacer
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
 
 app = Flask(__name__)
 
@@ -13,7 +17,6 @@ DB_NAME = "voters.db"
 QR_FOLDER = "static/qrs"
 os.makedirs(QR_FOLDER, exist_ok=True)
 
-# Load booth secret key
 with open("booth_secret.key", "rb") as f:
     cipher = Fernet(f.read())
 
@@ -22,7 +25,6 @@ def get_db():
     return sqlite3.connect(DB_NAME)
 
 
-# Home page
 @app.route("/")
 def index():
     db = get_db()
@@ -33,28 +35,17 @@ def index():
     return render_template("index.html", voters=voters)
 
 
-# Add voter + generate QR
 @app.route("/add", methods=["POST"])
 def add_voter():
     voter_id = request.form["voter_id"].strip().upper()
     name = request.form["name"].strip()
 
-    # Backend validation (extra safety)
-    if not re.match(r"^[A-Z]{3}[0-9]{7}$", voter_id):
-        return redirect("/")
-
-    voter_data = {
-        "voter_id": voter_id,
-        "name": name
-    }
-
+    voter_data = {"voter_id": voter_id, "name": name}
     encrypted = cipher.encrypt(json.dumps(voter_data).encode())
 
     qr_filename = f"{voter_id}.png"
     qr_path = os.path.join(QR_FOLDER, qr_filename)
-
-    qr = qrcode.make(encrypted.decode())
-    qr.save(qr_path)
+    qrcode.make(encrypted.decode()).save(qr_path)
 
     db = get_db()
     db.execute(
@@ -67,28 +58,62 @@ def add_voter():
     return redirect("/")
 
 
-# Delete voter
 @app.route("/delete/<voter_id>", methods=["POST"])
 def delete_voter(voter_id):
     db = get_db()
-
     row = db.execute(
         "SELECT qr_filename FROM voters WHERE voter_id = ?",
         (voter_id,)
     ).fetchone()
 
     if row:
-        qr_file = row[0]
-        qr_path = os.path.join(QR_FOLDER, qr_file)
+        qr_path = os.path.join(QR_FOLDER, row[0])
+        if os.path.exists(qr_path):
+            os.remove(qr_path)
 
         db.execute("DELETE FROM voters WHERE voter_id = ?", (voter_id,))
         db.commit()
 
-        if os.path.exists(qr_path):
-            os.remove(qr_path)
-
     db.close()
     return redirect("/")
+
+
+@app.route("/print_pdf")
+def print_pdf():
+    db = get_db()
+    voters = db.execute(
+        "SELECT voter_id, name, qr_filename FROM voters ORDER BY voter_id"
+    ).fetchall()
+    db.close()
+
+    pdf_path = "voter_list.pdf"
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.append(Paragraph("<b>VOTERS LIST</b>", styles["Title"]))
+    elements.append(Spacer(1, 20))
+
+    table_data = [["Voter ID", "Name", "QR Code"]]
+
+    for v in voters:
+        img = Image(os.path.join(QR_FOLDER, v[2]), width=70, height=70)
+        table_data.append([v[0], v[1], img])
+
+    table = Table(table_data, colWidths=[170, 170, 120])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightblue),
+        ("GRID", (0, 0), (-1, -1), 1, colors.black),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("FONT", (0, 0), (-1, 0), "Helvetica-Bold")
+    ]))
+
+    elements.append(table)
+
+    doc = SimpleDocTemplate(pdf_path, pagesize=A4)
+    doc.build(elements)
+
+    return send_file(pdf_path, as_attachment=True)
 
 
 if __name__ == "__main__":

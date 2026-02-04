@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -6,13 +7,19 @@
 </head>
 <body>
 
-<h1>OBVV QR GENERATOR</h1>
+<h1>Election Authority – QR Generator</h1>
 
 <form action="/add" method="post" onsubmit="return validateVoterId()">
     <input type="text" id="voter_id" name="voter_id"
            placeholder="Voter ID (AAA1234567)" required>
     <input type="text" name="name" placeholder="Voter Name" required>
     <button type="submit">Generate QR</button>
+</form>
+
+<br>
+
+<form action="/print_pdf" method="get">
+    <button type="submit">Print Voter List (PDF)</button>
 </form>
 
 <h2>Registered Voters</h2>
@@ -30,12 +37,12 @@
         <td>{{ v[0] }}</td>
         <td>{{ v[1] }}</td>
         <td>
-            <img src="{{ url_for('static', filename='qrs/' + v[2]) }}" width="120">
+            <img src="{{ url_for('static', filename='qrs/' + v[2]) }}" width="100">
         </td>
         <td>
             <form action="/delete/{{ v[0] }}" method="post"
                   onsubmit="return confirmDelete('{{ v[0] }}')">
-                <button type="submit" class="delete-btn">Delete</button>
+                <button class="delete-btn">Delete</button>
             </form>
         </td>
     </tr>
@@ -44,14 +51,18 @@
 
 <script>
 function validateVoterId() {
-    const voterId = document.getElementById("voter_id").value.trim();
+    const input = document.getElementById("voter_id");
+    const voterId = input.value.trim();
     const pattern = /^[A-Za-z]{3}[0-9]{7}$/;
 
+    input.classList.remove("error");
+
     if (!pattern.test(voterId)) {
+        input.classList.add("error");
         alert(
-            "Invalid Voter ID!\n\n" +
-            "Format required:\n" +
-            "• 3 alphabets followed by 7 digits\n\n" +
+            "❌ Invalid Voter ID\n\n" +
+            "Required format:\n" +
+            "• 3 alphabets + 7 digits\n\n" +
             "Example: ABC1234567"
         );
         return false;
@@ -61,8 +72,9 @@ function validateVoterId() {
 
 function confirmDelete(voterId) {
     return confirm(
-        "Are you sure you want to delete Voter ID: " + voterId +
-        "?\nThis action cannot be undone."
+        "⚠️ CONFIRM DELETE\n\n" +
+        "Voter ID: " + voterId + "\n\n" +
+        "This action cannot be undone."
     );
 }
 </script>

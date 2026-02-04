@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Election Authority – QR Generator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<h1>OBVV QR GENERATOR</h1>
+
+<form action="/add" method="post" onsubmit="return validateVoterId()">
+    <input type="text" id="voter_id" name="voter_id"
+           placeholder="Voter ID (AAA1234567)" required>
+    <input type="text" name="name" placeholder="Voter Name" required>
+    <button type="submit">Generate QR</button>
+</form>
+
+<h2>Registered Voters</h2>
+
+<table>
+    <tr>
+        <th>Voter ID</th>
+        <th>Name</th>
+        <th>QR Code</th>
+        <th>Action</th>
+    </tr>
+
+    {% for v in voters %}
+    <tr>
+        <td>{{ v[0] }}</td>
+        <td>{{ v[1] }}</td>
+        <td>
+            <img src="{{ url_for('static', filename='qrs/' + v[2]) }}" width="120">
+        </td>
+        <td>
+            <form action="/delete/{{ v[0] }}" method="post"
+                  onsubmit="return confirmDelete('{{ v[0] }}')">
+                <button type="submit" class="delete-btn">Delete</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+
+<script>
+function validateVoterId() {
+    const voterId = document.getElementById("voter_id").value.trim();
+    const pattern = /^[A-Za-z]{3}[0-9]{7}$/;
+
+    if (!pattern.test(voterId)) {
+        alert(
+            "Invalid Voter ID!\n\n" +
+            "Format required:\n" +
+            "• 3 alphabets followed by 7 digits\n\n" +
+            "Example: ABC1234567"
+        );
+        return false;
+    }
+    return true;
+}
+
+function confirmDelete(voterId) {
+    return confirm(
+        "Are you sure you want to delete Voter ID: " + voterId +
+        "?\nThis action cannot be undone."
+    );
+}
+</script>
+
+</body>
+</html>

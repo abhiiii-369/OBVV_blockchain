@@ -1,0 +1,114 @@
+/* ================== COLOR VARIABLES ================== */
+:root {
+    --primary-blue: #2f6f8f;     /* Header blue */
+    --primary-blue-dark: #245a74;
+    --secondary-blue: #3e8fb3;
+    --background-main: #eef4f7;
+    --background-card: #ffffff;
+    --text-primary: #1f2d3d;
+    --text-secondary: #4a5d6b;
+    --link-blue: #1b75bb;
+    --border-light: #cfdce4;
+    --danger-red: #c0392b;
+    --danger-red-hover: #e74c3c;
+}
+
+/* ================== GLOBAL ================== */
+body {
+    margin: 0;
+    padding: 30px;
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: linear-gradient(
+        to right,
+        var(--background-main),
+        #e3eff5
+    );
+    color: var(--text-primary);
+}
+
+/* ================== HEADINGS ================== */
+h1 {
+    color: var(--primary-blue-dark);
+    font-weight: 600;
+}
+
+h2 {
+    color: var(--primary-blue);
+    border-bottom: 2px solid var(--border-light);
+    padding-bottom: 5px;
+}
+
+/* ================== FORM ================== */
+form {
+    margin-bottom: 25px;
+}
+
+input {
+    padding: 8px 10px;
+    border: 1px solid var(--border-light);
+    border-radius: 3px;
+    margin-right: 8px;
+}
+
+input:focus {
+    outline: none;
+    border-color: var(--secondary-blue);
+}
+
+/* ================== BUTTONS ================== */
+button {
+    padding: 8px 16px;
+    background-color: var(--primary-blue);
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: var(--primary-blue-dark);
+}
+
+/* Delete button */
+.delete-btn {
+    background-color: var(--danger-red);
+}
+
+.delete-btn:hover {
+    background-color: var(--danger-red-hover);
+}
+
+/* ================== TABLE ================== */
+table {
+    border-collapse: collapse;
+    width: 90%;
+    background: var(--background-card);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+th {
+    background-color: var(--primary-blue);
+    color: white;
+    padding: 10px;
+    font-weight: 500;
+}
+
+td {
+    padding: 10px;
+    border: 1px solid var(--border-light);
+    color: var(--text-secondary);
+}
+
+tr:nth-child(even) {
+    background-color: #f4f9fc;
+}
+
+/* ================== LINKS ================== */
+a {
+    color: var(--link-blue);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}

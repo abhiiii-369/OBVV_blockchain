@@ -15,7 +15,7 @@ with open("booth_secret.key", "rb") as key_file:
 cipher = Fernet(DEVICE_SECRET_KEY)
 
 
-# DATABASE SETUP
+# DATABASE SETUPhhh
 
 DB_NAME = "booth_ledger_3.db"
 

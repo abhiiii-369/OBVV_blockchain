@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Central Verification – OBVV</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<h1>Central Verification – OBVV</h1>
+
+<p>
+    Connected Booth Ledgers: {{ booth_count }}
+    ({{ booths | join(", ") }})
+</p>
+
+<button id="startBtn">Start Verification</button>
+
+<div id="stats" style="margin-top:20px; font-size:18px;"></div>
+
+<h2 style="margin-top:40px;">Duplicate Votes</h2>
+
+<table id="dupTable">
+    <thead>
+        <tr>
+            <th>Voter Hash</th>
+            <th>Booth</th>
+            <th>Vote Count (Booth)</th>
+            <th>Timestamp</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+document.getElementById("startBtn").addEventListener("click", () => {
+    fetch("/start_verification")
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById("stats").innerHTML =
+                "Total Votes: " + data.total_votes +
+                " | Valid Votes: " + data.valid_votes +
+                " | Duplicate Votes: " + data.duplicate_votes;
+
+            const tbody = document.querySelector("#dupTable tbody");
+            tbody.innerHTML = "";
+
+            data.duplicates.forEach(d => {
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${d.voter_hash}</td>
+                    <td>${d.booth}</td>
+                    <td>${d.vote_count}</td>
+                    <td>${d.timestamp}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        });
+});
+</script>
+
+</body>
+</html>

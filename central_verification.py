@@ -1,78 +1,128 @@
-import json
-from datetime import datetime
+import os
+import sqlite3
+from flask import Flask, jsonify, render_template
 from collections import defaultdict
 
+app = Flask(__name__)
 
-def load_ledger(filename):
-    with open(filename, "r") as file:
-        return json.load(file)
-
-
-def parse_timestamp(ts):
-    return datetime.fromisoformat(ts)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CENTRAL_DB = os.path.join(BASE_DIR, "central_duplicates.db")
 
 
-def detect_duplicates(ledger_files):
+def get_central_db():
+    return sqlite3.connect(CENTRAL_DB)
+
+
+def init_central_db():
+    db = get_central_db()
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS duplicate_votes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            voter_hash TEXT,
+            booth TEXT,
+            vote_count INTEGER,
+            timestamp TEXT
+        )
+    """)
+    db.commit()
+    db.close()
+
+
+def detect_booth_databases():
+    return [
+        f for f in os.listdir(BASE_DIR)
+        if f.startswith("booth_ledger_") and f.endswith(".db")
+    ]
+
+
+def load_votes_from_booth(db_file):
+    path = os.path.join(BASE_DIR, db_file)
+    conn = sqlite3.connect(path)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT vote_count, voter_hash, timestamp
+        FROM booth_ledger
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
+def save_duplicate(voter_hash, booth, vote_count, timestamp):
+    db = get_central_db()
+    db.execute("""
+        INSERT INTO duplicate_votes (voter_hash, booth, vote_count, timestamp)
+        VALUES (?, ?, ?, ?)
+    """, (voter_hash, booth, vote_count, timestamp))
+    db.commit()
+    db.close()
+
+
+def detect_duplicates_and_counts():
+    booth_dbs = detect_booth_databases()
     vote_map = defaultdict(list)
 
-    # Step 1: Collect all votes from all booths
-    for booth_file in ledger_files:
-        ledger = load_ledger(booth_file)
+    total_votes = 0
 
-        for block in ledger:
-            if block["index"] == 0:
-                continue  # skip genesis block
+    for booth_db in booth_dbs:
+        booth_name = booth_db.replace(".db", "").replace("_", "-").title()
+        votes = load_votes_from_booth(booth_db)
 
-            vote_map[block["voter_hash"]].append({
-                "timestamp": parse_timestamp(block["timestamp"]),
-                "booth": booth_file
+        for vote_count, voter_hash, timestamp in votes:
+            total_votes += 1
+            vote_map[voter_hash].append({
+                "booth": booth_name,
+                "vote_count": vote_count,
+                "timestamp": timestamp
             })
 
-    valid_votes = []
-    duplicate_votes = []
+    duplicates = []
+    duplicate_count = 0
 
-    # Step 2: Detect duplicates
     for voter_hash, entries in vote_map.items():
-        entries.sort(key=lambda x: x["timestamp"])
+        if len(entries) > 1:
+            duplicate_count += len(entries) - 1
+            for e in entries[1:]:
+                save_duplicate(
+                    voter_hash,
+                    e["booth"],
+                    e["vote_count"],
+                    e["timestamp"]
+                )
+                duplicates.append({
+                    "voter_hash": voter_hash,
+                    "booth": e["booth"],
+                    "vote_count": e["vote_count"],
+                    "timestamp": e["timestamp"]
+                })
 
-        valid_votes.append({
-            "voter_hash": voter_hash,
-            "timestamp": entries[0]["timestamp"],
-            "booth": entries[0]["booth"]
-        })
+    valid_votes = len(vote_map)
 
-        for dup in entries[1:]:
-            duplicate_votes.append({
-                "voter_hash": voter_hash,
-                "timestamp": dup["timestamp"],
-                "booth": dup["booth"]
-            })
+    return {
+        "total_votes": total_votes,
+        "valid_votes": valid_votes,
+        "duplicate_votes": duplicate_count,
+        "duplicates": duplicates
+    }
 
-    return valid_votes, duplicate_votes
+
+@app.route("/")
+def index():
+    booths = detect_booth_databases()
+    booth_names = [b.replace(".db", "").replace("_", "-").title() for b in booths]
+    return render_template(
+        "index.html",
+        booth_count=len(booths),
+        booths=booth_names
+    )
+
+
+@app.route("/start_verification")
+def start_verification():
+    result = detect_duplicates_and_counts()
+    return jsonify(result)
 
 
 if __name__ == "__main__":
-    booth_ledgers = [
-        "booth_ledger_1.json",
-        "booth_ledger_2.json",
-        "booth_ledger_3.json"
-    ]
-
-    valid, duplicates = detect_duplicates(booth_ledgers)
-
-    print("\n✅ VALID VOTES")
-    for v in valid:
-        print(v)
-
-    print("\n🚨 DUPLICATE / FRAUD VOTES")
-    for d in duplicates:
-        print(d)
-
-    # Save reports
-    with open("valid_votes.json", "w") as f:
-        json.dump(valid, f, default=str, indent=4)
-
-    with open("duplicate_votes.json", "w") as f:
-        json.dump(duplicates, f, default=str, indent=4)
-
-    print("\nReports generated successfully.")
+    init_central_db()
+    app.run(debug=True)

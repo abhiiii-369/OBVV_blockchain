@@ -7,7 +7,7 @@ from cryptography.fernet import Fernet
 import sqlite3
 
 
-# ===================== DEVICE AUTHORIZATION =====================
+#  DEVICE AUTHORIZATION
 
 with open("booth_secret.key", "rb") as key_file:
     DEVICE_SECRET_KEY = key_file.read()
@@ -15,9 +15,9 @@ with open("booth_secret.key", "rb") as key_file:
 cipher = Fernet(DEVICE_SECRET_KEY)
 
 
-# ===================== DATABASE SETUP =====================
+# DATABASE SETUP
 
-DB_NAME = "booth_ledger.db"
+DB_NAME = "booth_ledger_1.db"
 
 def get_db():
     return sqlite3.connect(DB_NAME)
@@ -45,7 +45,7 @@ def save_vote_to_db(vote_count, voter_hash, timestamp):
     db.close()
 
 
-# ===================== BLOCKCHAIN (ORDER ONLY) =====================
+# BLOCKCHAIN (ORDER ONLY)
 
 class Block:
     def __init__(self, index, timestamp, voter_hash):
